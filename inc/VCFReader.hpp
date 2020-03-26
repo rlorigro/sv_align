@@ -27,7 +27,7 @@ public:
     vector <string> alleles;
 
     /// Methods ///
-    string to_string();
+    string to_string(char separator='\t');
 };
 
 class VCFReader {

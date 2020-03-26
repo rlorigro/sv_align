@@ -2,14 +2,34 @@
 #include "FastaReaderLite.hpp"
 #include "boost/program_options.hpp"
 #include <iostream>
+#include <cmath>
+#include <stdexcept>
 
 using std::cout;
+using std::cerr;
+using std::min;
+using std::max;
+using std::ofstream;
+using std::runtime_error;
+using std::to_string;
+using std::experimental::filesystem::create_directories;
 using boost::program_options::options_description;
 using boost::program_options::variables_map;
 using boost::program_options::value;
 
 
-void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, path output_dir){
+void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, uint32_t flank_size, path output_dir){
+    path output_filename = "haploblocks.fasta";
+    path output_fasta_path = absolute(output_dir) / output_filename;
+    create_directories(output_dir);
+
+    ofstream output_fasta(output_fasta_path);
+
+    if (not output_fasta.is_open()){
+        throw runtime_error("ERROR: could not create output file: " + output_fasta_path.string());
+    }
+    cerr << "Writing to " << output_fasta_path << '\n';
+
     FastaReaderLite fasta_reader(ref_fasta_path);
 
     vector <pair <string,string> > sequences;
@@ -20,9 +40,28 @@ void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, path outp
     map <string, vector <Variant> > variants;
     vcf_reader.read_all(variants);
 
-    for (auto& [chromosome, chromosome_variants]: variants) {
-        for (auto& v: chromosome_variants) {
-            
+    int64_t left_flank_start = 0;
+    int64_t right_flank_start = 0;
+
+    for (auto& [chromosome_name, sequence]: sequences) {
+        if (variants.count(chromosome_name) == 0){
+            cout << "Skipping " << chromosome_name << '\n';
+            continue;
+        }
+
+        for (auto& variant: variants.at(chromosome_name)) {
+            cout << variant.to_string() << '\n';
+            cout << chromosome_name << " " << sequence.size() << '\n';
+
+            left_flank_start = variant.reference_start - flank_size - 1;
+            left_flank_start = max(int64_t(0), left_flank_start);
+            right_flank_start = variant.reference_start - 1 + variant.alleles[0].size();
+            right_flank_start = min(int64_t(sequence.size()), right_flank_start);
+
+            output_fasta << '>' << variant.chromosome << '_' << to_string(variant.reference_start) << '\n';
+            output_fasta << sequence.substr(left_flank_start,variant.reference_start - left_flank_start - 1)
+                         << variant.alleles[1]
+                         << sequence.substr(right_flank_start,flank_size) << '\n';
         }
     }
 }
@@ -69,6 +108,7 @@ int main(int argc, char* argv[]){
     generate_haploblocks_from_vcf(
             ref_fasta_path,
             vcf_path,
+            flank_size,
             output_dir);
 
     return 0;

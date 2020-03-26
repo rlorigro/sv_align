@@ -8,13 +8,14 @@ using std::cout;
 using std::runtime_error;
 
 
-string Variant::to_string(){
+string Variant::to_string(char separator){
     return this->chromosome + "\t"
-            + std::to_string(this->reference_start) + "\t"
-            + std::to_string(this->quality) + "\t"
-            + std::to_string(this->pass) + "\t"
-            + std::to_string(this->genotype.first) + "/" + std::to_string(this->genotype.second) + "\t"
-            + this->alleles[this->genotype.first] + "\t"
+            + std::to_string(this->reference_start) + separator
+            + std::to_string(this->quality) + separator
+            + std::to_string(this->pass) + separator
+            + std::to_string(this->genotype.first) + "/" + std::to_string(this->genotype.second) + separator
+            + this->alleles[0] + separator
+            + this->alleles[this->genotype.first] + separator
             + this->alleles[this->genotype.second];
 }
 

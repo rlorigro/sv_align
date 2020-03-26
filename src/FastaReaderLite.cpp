@@ -29,12 +29,13 @@ void FastaReaderLite::read_all(vector <pair <string,string> >& sequences){
             // If not the first iteration, append a sequence element (pair of header + nt) to the vector
             if (not header.empty()){
                 sequences.emplace_back(header, sequence);
+                sequence.resize(0);
             }
 
             header = line.substr(1,line.size()-1);
         }
         else{
-            sequence = line.substr(0,line.size()-1);
+            sequence += line.substr(0,line.size());
         }
     }
 
