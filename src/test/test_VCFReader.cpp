@@ -22,6 +22,16 @@ int main() {
         }
     }
 
-    return 0;
+    cout << "\n\n";
+
+    variants = {};
+    reader.read_all(variants, 1);
+
+    for (auto& [chromosome, chromosome_variants]: variants) {
+        for (auto& v: chromosome_variants) {
+            cout << v.to_string() << '\n';
+        }
+    }
+
 }
 

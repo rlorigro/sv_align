@@ -35,9 +35,9 @@ void VCFReader::parse_genotype(ifstream& vcf_file, char& c, Variant& variant){
     string token;
 
     while (vcf_file.get(c)){
-        if (c == '/' or c == '\n'){
+        if (c == '/' or c == '|' or c == '\n' or c == '\t'){
             if (token == "."){
-                if (c == '/') {
+                if (c == '/' or c == '|') {
                     variant.genotype.first = 0;
                     token.resize(0);
                 }
@@ -47,7 +47,7 @@ void VCFReader::parse_genotype(ifstream& vcf_file, char& c, Variant& variant){
                 }
             }
             else{
-                if (c == '/') {
+                if (c == '/' or c == '|') {
                     variant.genotype.first = stoi(token);
                     token.resize(0);
                 }
@@ -64,7 +64,7 @@ void VCFReader::parse_genotype(ifstream& vcf_file, char& c, Variant& variant){
 }
 
 
-void VCFReader::read_all(map <string, vector <Variant> >& variants){
+void VCFReader::read_all(map <string, vector <Variant> >& variants, uint16_t sample_number){
     ///
     /// Parse a vcf with the format:
     /// #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	HG005733
@@ -109,7 +109,7 @@ void VCFReader::read_all(map <string, vector <Variant> >& variants){
                     variant.pass = false;
                 }
             }
-            else if (n_separators == 8){
+            else if (n_separators == (8 + sample_number)){
                 parse_genotype(vcf_file, c, variant);
             }
 

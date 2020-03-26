@@ -37,7 +37,7 @@ public:
 
     /// Methods ///
     VCFReader(path vcf_path);
-    void read_all(map <string, vector <Variant> >& variants);
+    void read_all(map <string, vector <Variant> >& variants, uint16_t sample_number=0);
     void parse_genotype(ifstream& vcf_file, char& c, Variant& variant);
 };
 

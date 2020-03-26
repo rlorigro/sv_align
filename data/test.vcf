@@ -203,8 +203,8 @@
 ##contig=<ID=chrY_KI270740_random,length=0>
 ##SAMPLE=<ID=HG005733>
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	HG005733
-chr1	5	.	G	GTTT	30	PASS	nonsense	GT	1/1
-chr2	4	.	T	TCC	30	PASS	nonsense	GT	1/1
-chr1	5	.	GGAG	G	30	PASS	nonsense	GT	1/1
-chr2	8	.	ATTA	A	30	PASS	nonsense	GT	1/1
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	HG001 HG002
+chr1	5	.	G	GTTT	30	PASS	nonsense	GT	0|1	1/1
+chr2	4	.	T	TCC	30	PASS	nonsense	GT	0|1	1/1
+chr1	5	.	GGAG	G	30	PASS	nonsense	GT	0|1	1/1
+chr2	8	.	ATTA	A	30	PASS	nonsense	GT	0|1	1/1

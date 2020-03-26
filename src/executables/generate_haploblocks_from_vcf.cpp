@@ -18,7 +18,7 @@ using boost::program_options::variables_map;
 using boost::program_options::value;
 
 
-void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, uint32_t flank_size, path output_dir){
+void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, uint16_t sample_number, uint32_t flank_size, path output_dir){
     path output_filename = "haploblocks.fasta";
     path output_fasta_path = absolute(output_dir) / output_filename;
     create_directories(output_dir);
@@ -30,19 +30,22 @@ void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, uint32_t 
     }
     cerr << "Writing to " << output_fasta_path << '\n';
 
+    cerr << "Reading Fasta...\n";
     FastaReaderLite fasta_reader(ref_fasta_path);
 
     vector <pair <string,string> > sequences;
     fasta_reader.read_all(sequences);
 
+    cerr << "Reading VCF...\n";
     VCFReader vcf_reader(vcf_path);
 
     map <string, vector <Variant> > variants;
-    vcf_reader.read_all(variants);
+    vcf_reader.read_all(variants, sample_number);
 
     int64_t left_flank_start = 0;
     int64_t right_flank_start = 0;
 
+    cerr << "Generating Haploblocks...\n";
     for (auto& [chromosome_name, sequence]: sequences) {
         if (variants.count(chromosome_name) == 0){
             cout << "Skipping " << chromosome_name << '\n';
@@ -50,9 +53,6 @@ void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, uint32_t 
         }
 
         for (auto& variant: variants.at(chromosome_name)) {
-            cout << variant.to_string() << '\n';
-            cout << chromosome_name << " " << sequence.size() << '\n';
-
             left_flank_start = variant.reference_start - flank_size - 1;
             left_flank_start = max(int64_t(0), left_flank_start);
             right_flank_start = variant.reference_start - 1 + variant.alleles[0].size();
@@ -72,6 +72,7 @@ int main(int argc, char* argv[]){
     path vcf_path;
     path output_dir;
     uint32_t flank_size;
+    uint16_t sample_number;
 
     options_description options("Arguments");
 
@@ -92,7 +93,12 @@ int main(int argc, char* argv[]){
             ("flank_size",
              value<uint32_t>(&flank_size)->
              default_value(100),
-             "Destination directory. File will be named based on input file name");
+             "Destination directory. File will be named based on input file name")
+
+            ("sample",
+             value<uint16_t>(&sample_number)->
+             default_value(0),
+             "The number of the sample (in order of appearance) to use for generating haploblocks, STARTING FROM 0");
 
     // Store options in a map and apply values to each corresponding variable
     variables_map vm;
@@ -108,6 +114,7 @@ int main(int argc, char* argv[]){
     generate_haploblocks_from_vcf(
             ref_fasta_path,
             vcf_path,
+            sample_number,
             flank_size,
             output_dir);
 
