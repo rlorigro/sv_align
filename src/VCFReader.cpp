@@ -88,7 +88,7 @@ void VCFReader::read_all(map <string, vector <Variant> >& variants, uint16_t sam
         }
 
         // If this line contains data, parse it
-        if ((c == '\t') or (c == '\n')){
+        if ((c == '\t') or (c == '\n') or (c == ',')){
             if (n_separators == 0){
                 variant.chromosome = token;
             }
@@ -113,7 +113,10 @@ void VCFReader::read_all(map <string, vector <Variant> >& variants, uint16_t sam
                 parse_genotype(vcf_file, c, variant);
             }
 
-            n_separators++;
+            if (c == '\t' or c == '\n'){
+                n_separators++;
+            }
+
             token.resize(0);
 
             // Reset variant at end of line

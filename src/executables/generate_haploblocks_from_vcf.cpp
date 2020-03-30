@@ -44,6 +44,7 @@ void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, uint16_t 
 
     int64_t left_flank_start = 0;
     int64_t right_flank_start = 0;
+    int64_t right_flank_size = 0;
 
     cerr << "Generating Haploblocks...\n";
     for (auto& [chromosome_name, sequence]: sequences) {
@@ -53,15 +54,30 @@ void generate_haploblocks_from_vcf(path ref_fasta_path, path vcf_path, uint16_t 
         }
 
         for (auto& variant: variants.at(chromosome_name)) {
+            // Haplotype 0
             left_flank_start = variant.reference_start - flank_size - 1;
             left_flank_start = max(int64_t(0), left_flank_start);
             right_flank_start = variant.reference_start - 1 + variant.alleles[0].size();
             right_flank_start = min(int64_t(sequence.size()), right_flank_start);
+            right_flank_size = min(int64_t(sequence.size() - right_flank_start), int64_t(flank_size));
 
-            output_fasta << '>' << variant.chromosome << '_' << to_string(variant.reference_start) << '\n';
+            output_fasta << '>' << variant.chromosome << '_' << to_string(variant.reference_start) << "_h0" << '\n';
             output_fasta << sequence.substr(left_flank_start,variant.reference_start - left_flank_start - 1)
-                         << variant.alleles[1]
-                         << sequence.substr(right_flank_start,flank_size) << '\n';
+                         << variant.alleles[variant.genotype.first]
+                         << sequence.substr(right_flank_start,right_flank_size) << '\n';
+
+            // Haplotype 1
+            left_flank_start = variant.reference_start - flank_size - 1;
+            left_flank_start = max(int64_t(0), left_flank_start);
+            right_flank_start = variant.reference_start - 1 + variant.alleles[0].size();
+            right_flank_start = min(int64_t(sequence.size() - 1), right_flank_start);
+            right_flank_size = min(int64_t(sequence.size() - right_flank_start), int64_t(flank_size));
+
+            output_fasta << '>' << variant.chromosome << '_' << to_string(variant.reference_start) << "_h1" << '\n';
+            output_fasta << sequence.substr(left_flank_start,variant.reference_start - left_flank_start - 1);
+            output_fasta << variant.alleles[variant.genotype.second];
+            output_fasta << sequence.substr(right_flank_start,right_flank_size) << '\n';
+
         }
     }
 }
