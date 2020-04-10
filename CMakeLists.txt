@@ -15,8 +15,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #set(CMAKE_CXX_FLAGS "-fexceptions -fno-new-ttp-matching -fsanitize=address")
 set(CMAKE_CXX_FLAGS "-fexceptions -fno-new-ttp-matching")
 
-add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
-#add_definitions(-O3 -Wall)              # Much optimization
+#add_definitions(-ggdb3 -O0 -Wall)       # Debugging + No optimization
+add_definitions(-O3 -Wall)              # Much optimization
 
 # Definitions needed to eliminate runtime dependency
 # on the boost system library.
@@ -38,6 +38,7 @@ include_directories(
 set(SOURCES
         src/VCFReader.cpp
         src/FastaReaderLite.cpp
+        src/GFAReader.cpp
         )
 
 
@@ -66,24 +67,27 @@ link_libraries(stdc++fs)
 find_package( Boost 1.60 COMPONENTS program_options REQUIRED )
 include_directories( ${Boost_INCLUDE_DIR} )
 
+find_package(VGio REQUIRED)
+
+
 # -------- TESTS --------
 
 set(FILENAME_PREFIX test_VCFReader)
 add_executable(${FILENAME_PREFIX} src/test/${FILENAME_PREFIX}.cpp)
 set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
-target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs)
+target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs VGio::VGio)
 
 set(FILENAME_PREFIX test_FastaReaderLite)
 add_executable(${FILENAME_PREFIX} src/test/${FILENAME_PREFIX}.cpp)
 set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
-target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs)
+target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs VGio::VGio)
 
 # -------- EXECUTABLES --------
 
 set(FILENAME_PREFIX generate_haploblocks_from_vcf)
 add_executable(${FILENAME_PREFIX} src/executables/${FILENAME_PREFIX}.cpp)
 set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
-target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs)
+target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs VGio::VGio)
 
 # -------- final steps --------
 
