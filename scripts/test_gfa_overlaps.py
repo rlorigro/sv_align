@@ -197,16 +197,16 @@ def main(gfa_path):
             true_cigar_stats, gfa_cigar_stats, alignment_string, warning = \
                 count_true_alignment_stats(sequences[node_a], sequences[node_b], link)
 
-            if true_cigar_stats.n_mismatches > 0:
+            if true_cigar_stats.n_mismatches > 0 or len(warning) > 0:
                 warning += "ERROR: mismatch found in alignment"
 
-            print(node_a + '\t' + node_b)
-            print(link)
-            print(true_cigar_stats)
-            print(gfa_cigar_stats)
-            print(alignment_string)
-            print(warning)
-            print()
+                print(node_a + '\t' + node_b)
+                print(link)
+                print(true_cigar_stats)
+                print(gfa_cigar_stats)
+                print(alignment_string)
+                print(warning)
+                print()
 
 
 if __name__ == "__main__":
