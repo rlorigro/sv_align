@@ -36,9 +36,10 @@ include_directories(
 
 # Define our shared library sources. NOT test executables.
 set(SOURCES
-        src/VCFReader.cpp
+        src/BinaryIO.cpp
         src/FastaReaderLite.cpp
         src/GFAReader.cpp
+        src/VCFReader.cpp
         )
 
 
@@ -82,12 +83,22 @@ add_executable(${FILENAME_PREFIX} src/test/${FILENAME_PREFIX}.cpp)
 set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
 target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs VGio::VGio)
 
+set(FILENAME_PREFIX test_GFAReader)
+add_executable(${FILENAME_PREFIX} src/test/${FILENAME_PREFIX}.cpp)
+set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
+target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs VGio::VGio)
+
+set(FILENAME_PREFIX test_VGio)
+add_executable(${FILENAME_PREFIX} src/test/${FILENAME_PREFIX}.cpp)
+set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
+target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs VGio::VGio)
+
 # -------- EXECUTABLES --------
 
 set(FILENAME_PREFIX generate_haploblocks_from_vcf)
 add_executable(${FILENAME_PREFIX} src/executables/${FILENAME_PREFIX}.cpp)
 set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
-target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs VGio::VGio)
+target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs)
 
 # -------- final steps --------
 
