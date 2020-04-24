@@ -40,6 +40,7 @@ set(SOURCES
         src/FastaReaderLite.cpp
         src/GFAReader.cpp
         src/VCFReader.cpp
+        src/BubbleChain.cpp
         )
 
 
@@ -96,6 +97,11 @@ target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRA
 # -------- EXECUTABLES --------
 
 set(FILENAME_PREFIX generate_haploblocks_from_vcf)
+add_executable(${FILENAME_PREFIX} src/executables/${FILENAME_PREFIX}.cpp)
+set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
+target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs)
+
+set(FILENAME_PREFIX extract_bubble_chains_from_gfa)
 add_executable(${FILENAME_PREFIX} src/executables/${FILENAME_PREFIX}.cpp)
 set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
 target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs)

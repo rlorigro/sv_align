@@ -33,15 +33,17 @@ GFAReader::GFAReader(path gfa_path){
 
     // Check if index exists, and generate one if necessary
     if (!exists(this->gfa_index_path)) {
-        cerr << "No index found, generating .gfai for " << this->gfa_path << "\n";
+        cerr << "No index found, generating .gfai for " << this->gfa_path << " ... ";
 
         this->index();
+        cerr << "done\n";
     }
     // If index is found, load it
     else{
-        cerr << "Found index, loading from disk: " << this->gfa_index_path << "\n";
+        cerr << "Found index, loading from disk: " << this->gfa_index_path << " ... ";
 
         this->read_index();
+        cerr << "done\n";
     }
 }
 
@@ -77,8 +79,8 @@ void GFAReader::read_index(){
         pread_value_from_binary(file_descriptor,  c, byte_index);
         pread_value_from_binary(file_descriptor,  offset, byte_index);
 
-        this->line_indexes.emplace_back(c,offset);
-        this->line_indexes_by_type[c].emplace_back(this->line_indexes.size() - 1);
+        this->line_offsets.emplace_back(c, offset);
+        this->line_indexes_by_type[c].emplace_back(this->line_offsets.size() - 1);
     }
 
     ::close(file_descriptor);
@@ -88,7 +90,7 @@ void GFAReader::read_index(){
 void GFAReader::write_index_to_binary_file(){
     ofstream index_file(this->gfa_index_path);
 
-    for (auto& item: this->line_indexes){
+    for (auto& item: this->line_offsets){
         // Write a pair, denoting the line type and the byte offset for the start of that line
         write_value_to_binary(index_file, item.type);
         write_value_to_binary(index_file, item.offset);
@@ -113,8 +115,8 @@ void GFAReader::index() {
         else{
             if (newline) {
                 gfa_type_code = c;
-                this->line_indexes.emplace_back(gfa_type_code, byte_offset);
-                this->line_indexes_by_type[gfa_type_code].emplace_back(this->line_indexes.size() - 1);
+                this->line_offsets.emplace_back(gfa_type_code, byte_offset);
+                this->line_indexes_by_type[gfa_type_code].emplace_back(this->line_offsets.size() - 1);
                 newline = false;
             }
         }
@@ -122,6 +124,55 @@ void GFAReader::index() {
     }
 
     // Append a placeholder to tell the total length of the file
-    this->line_indexes.emplace_back(this->EOF_CODE, byte_offset);
+    this->line_offsets.emplace_back(this->EOF_CODE, byte_offset);
     this->write_index_to_binary_file();
+}
+
+
+void GFAReader::map_sequences_by_node(){
+    ifstream gfa_file(this->gfa_path);
+    uint64_t n_separators = 0;
+    string token;
+    char c;
+
+    // For every sequence line that has been indexed, jump to their offset in the file and read just the node names
+    for (size_t i=0; i<this->line_indexes_by_type.at('S').size(); i++){
+        auto line_index = this->line_indexes_by_type.at('S')[i];
+        auto offset_start = this->line_offsets[line_index].offset;
+
+        gfa_file.seekg(offset_start);
+        n_separators = 0;
+        token.resize(0);
+
+        // Parse the node name
+        while (n_separators < 2){
+            gfa_file.get(c);
+
+            if (c == '\t'){
+                if (n_separators == 1){
+                    // Create the mapping that tells where in the file to find each node's sequence data
+                    this->sequence_line_indexes_by_node[token] = line_index;
+                }
+                n_separators++;
+                token.resize(0);
+            }
+            else{
+                token += c;
+            }
+
+        }
+    }
+}
+
+
+void GFAReader::read_line(string& s, size_t index){
+    if (this->gfa_file_descriptor == -1){
+        this->gfa_file_descriptor = ::open(this->gfa_path.c_str(), O_RDONLY);
+    }
+
+    off_t offset_start = this->line_offsets[index].offset;
+    off_t offset_stop = this->line_offsets[index+1].offset;
+    off_t length = offset_stop - offset_start;
+
+    pread_string_from_binary(this->gfa_file_descriptor, s, length, offset_start);
 }

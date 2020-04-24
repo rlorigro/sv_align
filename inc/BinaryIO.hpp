@@ -65,13 +65,13 @@ template<class T> void read_vector_from_binary(istream& s, vector<T>& v, uint64_
 }
 
 
-void pread_bytes(int file_descriptor, char* buffer_pointer, size_t bytes_to_read, off_t& byte_index);
+void pread_bytes(int file_descriptor, char* buffer_pointer, size_t bytes_to_read, off_t& offset);
 
 
-void pread_string_from_binary(int file_descriptor, string& s, uint64_t length, off_t& byte_index);
+void pread_string_from_binary(int file_descriptor, string& s, uint64_t length, off_t& offset);
 
 
-template<class T> void pread_value_from_binary(int file_descriptor,  T& v, off_t& byte_index){
+template<class T> void pread_value_from_binary(int file_descriptor,  T& v, off_t& offset){
     ///
     /// Reimplementation of binary read_value_from_binary(), but with Linux pread, which is threadsafe
     ///
@@ -79,11 +79,11 @@ template<class T> void pread_value_from_binary(int file_descriptor,  T& v, off_t
     size_t bytes_to_read = sizeof(T);
     char* buffer_pointer = reinterpret_cast<char*>(&v);
 
-    pread_bytes(file_descriptor, buffer_pointer, bytes_to_read, byte_index);
+    pread_bytes(file_descriptor, buffer_pointer, bytes_to_read, offset);
 }
 
 
-template<class T> void pread_vector_from_binary(int file_descriptor, vector<T>& v, uint64_t length, off_t& byte_index){
+template<class T> void pread_vector_from_binary(int file_descriptor, vector<T>& v, uint64_t length, off_t& offset){
     ///
     /// Reimplementation of binary read_vector_from_binary(), but with Linux pread, which is threadsafe
     ///
@@ -93,7 +93,7 @@ template<class T> void pread_vector_from_binary(int file_descriptor, vector<T>& 
     size_t bytes_to_read = sizeof(T)*length;
     char* buffer_pointer = reinterpret_cast<char*>(v.data());
 
-    pread_bytes(file_descriptor, buffer_pointer, bytes_to_read, byte_index);
+    pread_bytes(file_descriptor, buffer_pointer, bytes_to_read, offset);
 }
 
 

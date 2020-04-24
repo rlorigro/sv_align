@@ -31,8 +31,9 @@ public:
     path gfa_path;
     path gfa_index_path;
     int gfa_file_descriptor;
-    vector <GFAIndex> line_indexes;
+    vector <GFAIndex> line_offsets;
     map <char, vector <size_t> > line_indexes_by_type;
+    map <string, size_t> sequence_line_indexes_by_node;
     static const char EOF_CODE;
 
     /// Methods ///
@@ -41,6 +42,8 @@ public:
     void index();
     void read_index();
     void write_index_to_binary_file();
+    void map_sequences_by_node();
+    void read_line(string& s, size_t index);
 };
 
 
