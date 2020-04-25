@@ -1,22 +1,30 @@
 #include "BubbleChain.hpp"
 #include "GFAReader.hpp"
+#include "boost/bimap.hpp"
 #include "boost/program_options.hpp"
-#include <unordered_set>
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
+#include <unordered_set>
 
-using std::unordered_set;
+
 using std::cout;
-using std::ofstream;
+using std::cerr;
 using std::getline;
+using std::ofstream;
+using std::exception;
 using std::runtime_error;
+using std::unordered_map;
 using std::experimental::filesystem::create_directories;
 using boost::program_options::options_description;
 using boost::program_options::variables_map;
 using boost::program_options::value;
+using boost::bimap;
+
+typedef bimap<string,string> string_bimap;
+typedef string_bimap::value_type bimap_pair;
 
 
-void parse_nodes_from_assembly_summary_line(string& line, unordered_set<string>& forward_nodes, unordered_set<string>& reverse_nodes){
+void parse_nodes_from_assembly_summary_line(string& line, string_bimap& node_complements){
     ///
     /// Parse a line of the AssemblySummary.csv with the following format:
     ///     Rank,EdgeId,EdgeIdRc,Length,CumulativeLength,LengthFraction,CumulativeFraction
@@ -25,14 +33,17 @@ void parse_nodes_from_assembly_summary_line(string& line, unordered_set<string>&
 
     string token;
     uint64_t n_commas = 0;
+    string forward_node;
+    string reverse_node;
 
     for (auto& c: line){
         if (c == ','){
             if (n_commas == 1){
-                forward_nodes.insert(token);
+                forward_node = token;
             }
             else if (n_commas == 2){
-                reverse_nodes.insert(token);
+                reverse_node = token;
+                node_complements.insert(bimap_pair(forward_node, reverse_node));
                 break;
             }
 
@@ -46,11 +57,7 @@ void parse_nodes_from_assembly_summary_line(string& line, unordered_set<string>&
 }
 
 
-void extract_node_sets_from_assembly_summary(
-        path assembly_summary_path,
-        unordered_set<string>& forward_nodes,
-        unordered_set<string>& reverse_nodes) {
-
+void extract_node_sets_from_assembly_summary(path assembly_summary_path, string_bimap& node_complements) {
     ifstream assembly_summary(assembly_summary_path);
 
     if (not assembly_summary.is_open()){
@@ -69,7 +76,7 @@ void extract_node_sets_from_assembly_summary(
             throw runtime_error("ERROR: empty line found in file: " + assembly_summary_path.string() + " at line index " + std::to_string(l));
         }
 
-        parse_nodes_from_assembly_summary_line(line, forward_nodes, reverse_nodes);
+        parse_nodes_from_assembly_summary_line(line, node_complements);
 
         l++;
     }
@@ -94,21 +101,19 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
         throw runtime_error("ERROR: output GFA could not be written: " + output_path.string());
     }
 
-    unordered_set<string> forward_nodes;
-    unordered_set<string> reverse_nodes;
-
-    extract_node_sets_from_assembly_summary(assembly_summary_path, forward_nodes, reverse_nodes);
+    string_bimap node_complements;
+    extract_node_sets_from_assembly_summary(assembly_summary_path, node_complements);
 
     GFAReader gfa_reader(gfa_path);
 //    gfa_reader.map_sequences_by_node();
 
     string line;
     uint64_t l = 0;
+    uint64_t n_forward = 0;
+    uint64_t n_reverse = 0;
 
     BubbleChainComponent chain_component;
     BubbleChainComponent previous_chain_component;
-    uint64_t n_forward = 0;
-    uint64_t n_reverse = 0;
 
     ///
     /// Parse the bubble chain CSV with the format:
@@ -116,30 +121,36 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
     ///
     string s;
     while (getline(bubble_chain_file, line)){
+        // Skip header line
         if (l == 0){
             l++;
             continue;
         }
+
+        // Catch empty lines if they exist?
         if (line.empty()){
             throw runtime_error("ERROR: empty line found in file: " + bubble_path.string() + " at line index " + std::to_string(l));
         }
 
+        // Record the stats about this component in the bubble chain (either a haploid segment or polyploid segment set)
         parse_line_as_bubble_chain_component(line, chain_component);
 
+        // When the chain ends
         if (chain_component.chain != previous_chain_component.chain){
             cout << n_forward << " " << n_reverse << '\n';
             n_forward = 0;
             n_reverse = 0;
         }
 
+        // Write all the segments to a file
         for (auto& segment: chain_component.segments) {
-            if (forward_nodes.count(segment) > 0){
+            if (node_complements.left.find(segment) != node_complements.left.end()) {
                 n_forward++;
             }
-            else if (reverse_nodes.count(segment) > 0){
+            else if (node_complements.right.find(segment) != node_complements.right.end()) {
                 n_reverse++;
             }
-            else {
+            else{
                 throw runtime_error("ERROR: node not in set of known forward/reverse nodes from AssemblySummary.csv: " + segment);
             }
         }
@@ -149,7 +160,6 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
 //            output_gfa << s;
 //            cout << s << '\n';
 //        }
-
 
         previous_chain_component = chain_component;
         l++;
