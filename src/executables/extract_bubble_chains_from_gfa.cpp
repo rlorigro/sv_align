@@ -105,7 +105,7 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
     extract_node_sets_from_assembly_summary(assembly_summary_path, node_complements);
 
     GFAReader gfa_reader(gfa_path);
-//    gfa_reader.map_sequences_by_node();
+    gfa_reader.map_sequences_by_node();
 
     string line;
     uint64_t l = 0;
@@ -119,7 +119,9 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
     /// Parse the bubble chain CSV with the format:
     ///     Chain,Circular,Position,Segment0,Segment1,Segment2,Segment3,Segment4,
     ///
-    string s;
+    string gfa_line;
+    string node_name;
+    unordered_set <string> forward_nodes;
     while (getline(bubble_chain_file, line)){
         // Skip header line
         if (l == 0){
@@ -144,22 +146,34 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
 
         // Write all the segments to a file
         for (auto& segment: chain_component.segments) {
-            if (node_complements.left.find(segment) != node_complements.left.end()) {
+            auto forward_complement = node_complements.left.find(segment);
+            auto reverse_complement = node_complements.right.find(segment);
+
+            // If there is a key in the forward complement side of the bimap (the node is already forward)
+            if (forward_complement != node_complements.left.end()) {
                 n_forward++;
+                gfa_reader.read_line(gfa_line, gfa_reader.sequence_line_indexes_by_node.at(segment));
+                output_gfa << gfa_line;
             }
-            else if (node_complements.right.find(segment) != node_complements.right.end()) {
+            // If there is a key in the reverse complement side of the bimap (the node is reverse, needs to flip)
+            else if (reverse_complement != node_complements.right.end()) {
                 n_reverse++;
+                segment = reverse_complement->get_right();
+
+                try {
+                    gfa_reader.read_line(gfa_line, gfa_reader.sequence_line_indexes_by_node.at(segment));
+                }
+                catch (exception& e){
+                    cerr << "Could not find node in GFA: " << segment << '\n';
+                    throw e.what();
+                }
+
+                output_gfa << gfa_line;
             }
             else{
                 throw runtime_error("ERROR: node not in set of known forward/reverse nodes from AssemblySummary.csv: " + segment);
             }
         }
-
-//        for (auto& segment: chain_component.segments){
-//            gfa_reader.read_line(s, gfa_reader.sequence_line_indexes_by_node.at(segment));
-//            output_gfa << s;
-//            cout << s << '\n';
-//        }
 
         previous_chain_component = chain_component;
         l++;

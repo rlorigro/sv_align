@@ -130,38 +130,133 @@ void GFAReader::index() {
 
 
 void GFAReader::map_sequences_by_node(){
+    cerr << "Mapping GFA S lines to node names... ";
+
     ifstream gfa_file(this->gfa_path);
-    uint64_t n_separators = 0;
     string token;
-    char c;
+    char c = 0;
 
     // For every sequence line that has been indexed, jump to their offset in the file and read just the node names
     for (size_t i=0; i<this->line_indexes_by_type.at('S').size(); i++){
         auto line_index = this->line_indexes_by_type.at('S')[i];
-        auto offset_start = this->line_offsets[line_index].offset;
-
-        gfa_file.seekg(offset_start);
-        n_separators = 0;
+        auto offset_start = this->line_offsets[line_index].offset + 2;  // Skip the line type character and tab
         token.resize(0);
 
-        // Parse the node name
-        while (n_separators < 2){
-            gfa_file.get(c);
+        gfa_file.seekg(offset_start);
 
+        // Parse the node name
+        while (gfa_file.get(c)){
             if (c == '\t'){
-                if (n_separators == 1){
-                    // Create the mapping that tells where in the file to find each node's sequence data
-                    this->sequence_line_indexes_by_node[token] = line_index;
-                }
-                n_separators++;
-                token.resize(0);
+                break;
             }
-            else{
+            token += c;
+        }
+
+        // Create the mapping that tells where in the file to find each node's sequence data
+        this->sequence_line_indexes_by_node[token] = line_index;
+        c = 0;
+    }
+
+    cerr << "done\n";
+}
+
+
+void GFAReader::map_links_by_node(){
+    cerr << "Mapping GFA L lines to node names... ";
+
+    ifstream gfa_file(this->gfa_path);
+    string token;
+    uint64_t n_separators = 0;
+    char c = 0;
+
+    // For every link line that has been indexed, jump to their offset in the file and read just the node names
+    for (size_t i=0; i<this->line_indexes_by_type.at('L').size(); i++){
+        auto line_index = this->line_indexes_by_type.at('L')[i];
+        auto offset_start = this->line_offsets[line_index].offset + 2;  // Skip the line type character and tab
+        token.resize(0);
+        n_separators = 0;
+
+        gfa_file.seekg(offset_start);
+
+        // Parse the node name
+        while (gfa_file.get(c)){
+            if (c == '\t'){
+                if (n_separators == 0){
+                    // Create the mapping that tells where in the file to find each node's sequence data
+                    this->link_line_indexes_by_node[token].insert(line_index);
+                }
+                else if (n_separators == 2){
+                    // Create the mapping that tells where in the file to find each node's sequence data
+                    this->link_line_indexes_by_node[token].insert(line_index);
+                    break;
+                }
+                token.resize(0);
+                n_separators++;
+            }
+            else {
                 token += c;
             }
-
         }
+
+        c = 0;
     }
+
+    cerr << "done\n";
+}
+
+
+void GFAReader::write_link_subset_to_file(unordered_set<string>& node_subset, ofstream& output_file){
+    cerr << "Writing GFA L lines to file... ";
+
+    ifstream gfa_file(this->gfa_path);
+    uint64_t n_separators = 0;
+    bool found_a = false;
+    bool found_b = false;
+    string token;
+    string line;
+    char c = 0;
+
+    // For every link line that has been indexed, jump to their offset in the file and read just the node names
+    for (size_t i=0; i<this->line_indexes_by_type.at('L').size(); i++){
+        auto line_index = this->line_indexes_by_type.at('L')[i];
+        auto offset_start = this->line_offsets[line_index].offset;  // Skip the line type character and tab
+        token.resize(0);
+        n_separators = 0;
+        found_a = false;
+        found_b = false;
+
+        gfa_file.seekg(offset_start);
+
+        // Parse the node name
+        while (gfa_file.get(c)){
+            if (c == '\t'){
+                if (n_separators == 1){
+                    found_a = (node_subset.count(token) != 0);
+                }
+                else if (n_separators == 3){
+                    found_b = (node_subset.count(token) != 0);
+                }
+                token.resize(0);
+                n_separators++;
+            }
+            else {
+                token += c;
+            }
+            line += c;
+
+            if (c == '\n'){
+                break;
+            }
+        }
+
+        if (found_a and found_b){
+            output_file << line;
+        }
+
+        c = 0;
+    }
+
+    cerr << "done\n";
 }
 
 
