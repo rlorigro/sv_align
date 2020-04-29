@@ -253,6 +253,7 @@ void GFAReader::write_link_subset_to_file(unordered_set<string>& node_subset, of
             output_file << line;
         }
 
+        line.resize(0);
         c = 0;
     }
 

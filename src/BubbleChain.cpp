@@ -3,7 +3,7 @@
 
 string BubbleChainComponent::to_string(){
     string s;
-    s = std::to_string(this->chain) + '\t' + std::to_string(this->circular) + '\t' + std::to_string(this->position);
+    s = std::to_string(this->id) + '\t' + std::to_string(this->circular) + '\t' + std::to_string(this->position);
     for (auto& segment: this->segments){
         s += '\t' + segment;
     }
@@ -13,7 +13,7 @@ string BubbleChainComponent::to_string(){
 
 
 BubbleChainComponent::BubbleChainComponent(){
-    this->chain = 0;
+    this->id = 0;
     this->circular = false;
     this->position = 0;
 }
@@ -40,7 +40,7 @@ void parse_line_as_bubble_chain_component(string& line, BubbleChainComponent& ch
     for (auto& c: line){
         if (c == ',') {
             if (n_commas == 0){
-                chain_component.chain = stoi(token);
+                chain_component.id = stoi(token);
             }
             else if (n_commas == 1){
                 chain_component.circular = parse_string_as_bool(token);

@@ -13,7 +13,7 @@ using std::runtime_error;
 class BubbleChainComponent{
 public:
     /// Attributes ///
-    uint64_t chain;
+    uint64_t id;
     bool circular;
     uint64_t position;
     vector <string> segments;
