@@ -106,6 +106,11 @@ add_executable(${FILENAME_PREFIX} src/executables/${FILENAME_PREFIX}.cpp)
 set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
 target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs)
 
+set(FILENAME_PREFIX measure_sv_sensitivity)
+add_executable(${FILENAME_PREFIX} src/executables/${FILENAME_PREFIX}.cpp)
+set_property(TARGET ${FILENAME_PREFIX} PROPERTY INSTALL_RPATH "$ORIGIN")
+target_link_libraries(${FILENAME_PREFIX} sv_align Threads::Threads ${Boost_LIBRARIES} stdc++fs VGio::VGio)
+
 # -------- final steps --------
 
 # Where to install

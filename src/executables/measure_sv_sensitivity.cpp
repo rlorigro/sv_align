@@ -1,27 +1,32 @@
 #include "BubbleChain.hpp"
 #include "GFAReader.hpp"
-#include "boost/bimap.hpp"
+#include "vg/vg.pb.h"
+#include "vg/io/protobuf_iterator.hpp"
 #include "boost/program_options.hpp"
-#include <iostream>
-#include <stdexcept>
-#include <unordered_set>
+#include <string>
+#include <experimental/filesystem>
+#include "boost/bimap.hpp"
 
-
+using std::ifstream;
+using std::string;
+using std::pair;
 using std::cout;
 using std::cerr;
-using std::getline;
-using std::ofstream;
-using std::exception;
+using std::stoi;
+using std::to_string;
+using std::unordered_set;
 using std::runtime_error;
-using std::unordered_map;
+using std::experimental::filesystem::path;
 using std::experimental::filesystem::create_directories;
 using boost::program_options::options_description;
 using boost::program_options::variables_map;
 using boost::program_options::value;
+using vg::Alignment;
 using boost::bimap;
 
 typedef bimap<string,string> string_bimap;
 typedef string_bimap::value_type bimap_pair;
+
 
 
 void parse_nodes_from_assembly_summary_line(string& line, string_bimap& node_complements){
@@ -83,71 +88,46 @@ void extract_node_sets_from_assembly_summary(path assembly_summary_path, string_
 }
 
 
-void write_chain_segments_to_output_gfa(
-        BubbleChainComponent& chain_component,
-        string_bimap& node_complements,
-        GFAReader& gfa_reader,
-        string& gfa_line,
-        ofstream& output_gfa,
-        unordered_set <string>& forward_nodes){
+void extract_haplotype_info_from_read_name(string& read_name, uint64_t& haplotype, uint64_t& length){
+    uint64_t n_separators = 0;
 
-    // Write all the segments to a file
-    for (auto& segment: chain_component.segments) {
-        auto forward_complement = node_complements.left.find(segment);
-        auto reverse_complement = node_complements.right.find(segment);
+    for (int64_t i=read_name.size()-1; i>=0; i--){
+        if (read_name[i] == '_'){
+            if (n_separators == 0){
+                length = stoi(read_name.substr(i+1,read_name.size()-i));
+                haplotype = stoi(string(1,read_name[i-1]));
 
-        // If there is a key in the forward complement side of the bimap (the node is already forward)
-        if (forward_complement != node_complements.left.end()) {
-            gfa_reader.read_line(gfa_line, gfa_reader.sequence_line_indexes_by_node.at(segment));
-            output_gfa << gfa_line;
-        }
-            // If there is a key in the reverse complement side of the bimap (the node is reverse, needs to flip)
-        else if (reverse_complement != node_complements.right.end()) {
-            segment = reverse_complement->get_left();
-
-            try {
-                gfa_reader.read_line(gfa_line, gfa_reader.sequence_line_indexes_by_node.at(segment));
+                cerr << read_name << " " << read_name.substr(i+1,read_name.size()-i) << " " << length << " " << haplotype << '\n';
             }
-            catch (exception& e){
-                cerr << "Could not find node in GFA: " << segment << '\n';
-                throw e.what();
-            }
-
-            output_gfa << gfa_line;
+            n_separators++;
         }
-        else{
-            throw runtime_error("ERROR: node not in set of known forward/reverse nodes from AssemblySummary.csv: " + segment);
-        }
-
-        forward_nodes.insert(segment);
     }
-
 }
 
 
-void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assembly_summary_path, path output_dir){
+void measure_sv_sensitivity(path gfa_path, path gam_path, path bubble_path, path assembly_summary_path, path output_dir){
+    GFAReader gfa_reader(gfa_path);
+    gfa_reader.map_sequences_by_node();
+    gfa_reader.map_links_by_node();
+
     create_directories(output_dir);
     ifstream bubble_chain_file(bubble_path);
+    ifstream gam_file(gam_path);
 
     if (not bubble_chain_file.is_open()){
         throw runtime_error("ERROR: could not open bubble chain file: " + bubble_path.string());
     }
 
-    path output_path = gfa_path.filename();
-    output_path.replace_extension("bubble_chains.gfa");
-    output_path = output_dir / output_path;
-
-    ofstream output_gfa(output_path);
-
-    if (not output_gfa.good()){
-        throw runtime_error("ERROR: output GFA could not be written: " + output_path.string());
+    if (not gam_file.is_open()){
+        throw runtime_error("ERROR: could not open bubble chain file: " + bubble_path.string());
     }
+
+    path output_path = output_dir / ("bubble_stats_" + gam_path.filename().string());
+    output_path.replace_extension("csv");
+    ofstream output_file(output_path);
 
     string_bimap node_complements;
     extract_node_sets_from_assembly_summary(assembly_summary_path, node_complements);
-
-    GFAReader gfa_reader(gfa_path);
-    gfa_reader.map_sequences_by_node();
 
     string line;
     uint64_t l = 0;
@@ -161,7 +141,7 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
     ///
     string gfa_line;
     string node_name;
-    unordered_set <string> forward_nodes;
+    unordered_set <string> is_bubble;
     vector <BubbleChainComponent> chain;
     while (getline(bubble_chain_file, line)){
         // Skip header line
@@ -178,31 +158,88 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
         // Record the data about this component in the bubble chain (either a haploid segment or polyploid segment set)
         parse_line_as_bubble_chain_component(line, chain_component);
 
-        // When the chain ends
-        if (chain_component.id != previous_chain_component.id and chain.size() > 1){
-            for (auto& c: chain){
-                write_chain_segments_to_output_gfa(
-                        c,
-                        node_complements,
-                        gfa_reader,
-                        gfa_line,
-                        output_gfa,
-                        forward_nodes);
+        if (chain_component.segments.size() > 1){
+            for (auto& segment: chain_component.segments) {
+                is_bubble.insert(segment);
+
+                auto forward_complement = node_complements.left.find(segment);
+                auto reverse_complement = node_complements.right.find(segment);
+                if (forward_complement != node_complements.left.end()) {
+                    is_bubble.insert(forward_complement->get_right());
+                }
+                else if (reverse_complement != node_complements.right.end()) {
+                    is_bubble.insert(reverse_complement->get_left());
+                }
             }
-            chain.resize(0);
         }
 
-        chain.push_back(chain_component);
-        previous_chain_component = chain_component;
-        l++;
+        for (auto& segment: chain_component.segments){
+            if (segment == "464300"){
+                cerr << chain_component.to_string() << '\n';
+                cerr << chain_component.segments.size() << '\n';
+            }
+        }
+
     }
 
-    gfa_reader.write_link_subset_to_file(forward_nodes, output_gfa);
+    node_complements.clear();
+
+    string read_name;
+    uint64_t haplotype = 0;
+    uint64_t haplotype_length = 0;
+    uint16_t n_bubbles = 0;
+    uint64_t total_bubble_length = 0;
+    bool alignment_in_bubble;
+    ifstream datastream(gam_path);
+    unordered_set<string> nodes_in_alignment;
+
+    for (vg::io::ProtobufIterator<Alignment> it(datastream); it.has_current(); it.advance()) {
+        Alignment& alignment = *it;
+        read_name = alignment.name();
+
+        nodes_in_alignment.clear();
+        node_name.resize(0);
+
+        total_bubble_length = 0;
+        n_bubbles = 0;
+
+        cout << "\nName: " << read_name << '\n';
+
+        for (auto& mapping: alignment.path().mapping()){
+            node_name = to_string(mapping.position().node_id());
+            nodes_in_alignment.insert(node_name);
+
+            alignment_in_bubble = (is_bubble.find(node_name) != is_bubble.end());
+
+            cout << "Segment: " << node_name << '\n';
+            cout << "Is bubble: " << alignment_in_bubble << '\n';
+            cout << "Is bubble??: " << (is_bubble.count(node_name) > 0) << '\n';
+            cout << "Is bubble??: " << (is_bubble.find(node_name) != is_bubble.end()) << '\n';
+
+            if (alignment_in_bubble){
+                n_bubbles++;
+                total_bubble_length += gfa_reader.get_sequence_length(node_name);
+            }
+        }
+
+        extract_haplotype_info_from_read_name(read_name, haplotype, haplotype_length);
+
+        if (haplotype_length > 1){
+            output_file << read_name << "," << n_bubbles << "," << haplotype_length << "," << total_bubble_length << '\n';
+        }
+
+        if (read_name == "chr14_85915451_h0_1") {
+            path subgraph_path = output_dir / (read_name + "_subgraph.gfa");
+            ofstream subgraph_gfa_file(subgraph_path);
+            gfa_reader.write_subgraph_to_file(nodes_in_alignment, subgraph_gfa_file);
+        }
+    }
 }
 
 
 int main(int argc, char* argv[]){
     path gfa_path;
+    path gam_path;
     path bubble_path;
     path assembly_summary_path;
     path output_dir;
@@ -212,7 +249,11 @@ int main(int argc, char* argv[]){
     options.add_options()
             ("gfa",
              value<path>(&gfa_path),
-             "File path of GFA file containing shasta assembly graph")
+             "File path of GFA file containing reference graph which reads were aligned to")
+
+            ("gam",
+             value<path>(&gam_path),
+             "File path of GAM file containing SVs aligned to assembly GFA")
 
             ("bubbles",
              value<path>(&bubble_path),
@@ -238,8 +279,9 @@ int main(int argc, char* argv[]){
         return 0;
     }
 
-    extract_bubble_chains_from_gfa(
+    measure_sv_sensitivity(
             gfa_path,
+            gam_path,
             bubble_path,
             assembly_summary_path,
             output_dir);

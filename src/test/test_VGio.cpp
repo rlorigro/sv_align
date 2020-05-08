@@ -10,6 +10,7 @@ using std::experimental::filesystem::path;
 using std::ifstream;
 using std::string;
 using std::pair;
+using std::cout;
 using std::cerr;
 using std::stringstream;
 using vg::Alignment;
@@ -42,11 +43,11 @@ int main(){
         cerr << "\nName: " << alignment.name() << '\n'
             << "Map Quality: " << alignment.mapping_quality() << '\n'
             << "Mapping Size: " << alignment.path().mapping_size() << '\n'
-            << "Has Path: " << alignment.has_path() << '\n'
-            << "Path Length: " << alignment.path().length() << '\n'
             << "Virtual Offset: " << it.tell_group() << " = " << vo_parts.first << ", " << vo_parts.second << '\n';
 
         for (auto& mapping: alignment.path().mapping()){
+            cout << mapping.position().node_id() << '\n';
+
             for (auto& edit: mapping.edit()) {
                 cerr << "\nfrom_length:\t" << edit.from_length() << '\n';
                 cerr << "to_length:\t" << edit.to_length() << '\n';

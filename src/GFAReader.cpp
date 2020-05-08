@@ -129,6 +129,19 @@ void GFAReader::index() {
 }
 
 
+void GFAReader::read_line(string& s, size_t index){
+    if (this->gfa_file_descriptor == -1){
+        this->gfa_file_descriptor = ::open(this->gfa_path.c_str(), O_RDONLY);
+    }
+
+    off_t offset_start = this->line_offsets[index].offset;
+    off_t offset_stop = this->line_offsets[index+1].offset;
+    off_t length = offset_stop - offset_start;
+
+    pread_string_from_binary(this->gfa_file_descriptor, s, length, offset_start);
+}
+
+
 void GFAReader::map_sequences_by_node(){
     cerr << "Mapping GFA S lines to node names... ";
 
@@ -182,11 +195,11 @@ void GFAReader::map_links_by_node(){
         while (gfa_file.get(c)){
             if (c == '\t'){
                 if (n_separators == 0){
-                    // Create the mapping that tells where in the file to find each node's sequence data
+                    // Create the mapping that tells where in the file to find each node's link data
                     this->link_line_indexes_by_node[token].insert(line_index);
                 }
                 else if (n_separators == 2){
-                    // Create the mapping that tells where in the file to find each node's sequence data
+                    // Create the mapping that tells where in the file to find each node's link data
                     this->link_line_indexes_by_node[token].insert(line_index);
                     break;
                 }
@@ -261,14 +274,42 @@ void GFAReader::write_link_subset_to_file(unordered_set<string>& node_subset, of
 }
 
 
-void GFAReader::read_line(string& s, size_t index){
-    if (this->gfa_file_descriptor == -1){
-        this->gfa_file_descriptor = ::open(this->gfa_path.c_str(), O_RDONLY);
+void GFAReader::write_subgraph_to_file(unordered_set <string>& nodes, ofstream& output_gfa){
+    string gfa_line;
+    for (auto& node_name: nodes){
+        this->read_line(gfa_line, this->sequence_line_indexes_by_node.at(node_name));
+        output_gfa << gfa_line;
     }
 
-    off_t offset_start = this->line_offsets[index].offset;
-    off_t offset_stop = this->line_offsets[index+1].offset;
-    off_t length = offset_stop - offset_start;
-
-    pread_string_from_binary(this->gfa_file_descriptor, s, length, offset_start);
+    this->write_link_subset_to_file(nodes, output_gfa);
 }
+
+
+uint64_t GFAReader::get_sequence_length(string node_name){
+    auto vector_index = this->sequence_line_indexes_by_node.at(node_name);
+    auto start_index = this->line_offsets[vector_index].offset;
+
+    char c;
+    uint64_t length = 0;
+    uint64_t n_separators = 0;
+    ifstream file(this->gfa_path);
+
+    file.seekg(start_index);
+
+    // Count only characters in the sequence (not before or after)
+    while(file.get(c)) {
+        if (c == '\t' or c == '\n') {
+            n_separators++;
+        } else {
+            if (n_separators == 2) {
+                length++;
+            }
+            else if (n_separators > 2){
+                break;
+            }
+        }
+    }
+
+    return length;
+}
+

@@ -54,6 +54,8 @@ public:
     void map_links_by_node();
     void read_line(string& s, size_t index);
     void write_link_subset_to_file(unordered_set<string>& node_subset, ofstream& output_file);
+    void write_subgraph_to_file(unordered_set <string>& nodes, ofstream& output_gfa);
+    uint64_t get_sequence_length(string node_name);
 };
 
 
