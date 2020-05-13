@@ -88,42 +88,176 @@ void write_chain_segments_to_output_gfa(
         string_bimap& node_complements,
         GFAReader& gfa_reader,
         string& gfa_line,
-        ofstream& output_gfa,
-        unordered_set <string>& forward_nodes){
+        ofstream& output_gfa){
 
     // Write all the segments to a file
     for (auto& segment: chain_component.segments) {
-        auto forward_complement = node_complements.left.find(segment);
-        auto reverse_complement = node_complements.right.find(segment);
-
-        // If there is a key in the forward complement side of the bimap (the node is already forward)
-        if (forward_complement != node_complements.left.end()) {
+        try {
             gfa_reader.read_line(gfa_line, gfa_reader.sequence_line_indexes_by_node.at(segment));
-            output_gfa << gfa_line;
         }
-            // If there is a key in the reverse complement side of the bimap (the node is reverse, needs to flip)
-        else if (reverse_complement != node_complements.right.end()) {
-            segment = reverse_complement->get_left();
-
-            try {
-                gfa_reader.read_line(gfa_line, gfa_reader.sequence_line_indexes_by_node.at(segment));
-            }
-            catch (exception& e){
-                cerr << "Could not find node in GFA: " << segment << '\n';
-                throw e.what();
-            }
-
-            output_gfa << gfa_line;
-        }
-        else{
-            throw runtime_error("ERROR: node not in set of known forward/reverse nodes from AssemblySummary.csv: " + segment);
+        catch (exception& e){
+            cerr << "Could not find node in GFA: " << segment << '\n';
+            throw e.what();
         }
 
-        forward_nodes.insert(segment);
+        output_gfa << gfa_line;
     }
-
 }
 
+
+void write_all_chains_to_output_gfa(
+        vector <vector <BubbleChainComponent> >& chains,
+        string_bimap& node_complements,
+        GFAReader& gfa_reader,
+        ofstream& output_gfa){
+
+    string line;
+    for (auto& chain: chains){
+        for (auto& component: chain){
+            write_chain_segments_to_output_gfa(
+                    component,
+                    node_complements,
+                    gfa_reader,
+                    line,
+                    output_gfa);
+        }
+    }
+}
+
+
+void find_single_stranded_chains_from_bubble_chains(
+        vector <vector <BubbleChainComponent> >& chains,
+        vector <vector <BubbleChainComponent> >& single_stranded_chains,
+        unordered_map <string, size_t>& chain_indexes_by_node_ids,
+        string_bimap& node_complements,
+        unordered_set <string>& single_stranded_nodes){
+
+    size_t i_complement = 0;
+    string start_id;
+    string start_id_complement;
+    unordered_set <size_t> found_chains;
+    bool not_found;
+
+    for (size_t i=0; i<chains.size(); i++){
+        start_id = chains[i][0].segments[0];
+        auto start_id_left = node_complements.left.find(start_id);
+        auto start_id_right = node_complements.right.find(start_id);
+
+        // Find the start_id complement id
+        if (start_id_left != node_complements.left.end()){
+            start_id_complement = start_id_left->get_right();
+        }
+        else if (start_id_right != node_complements.right.end()){
+            start_id_complement = start_id_right->get_left();
+        }
+
+        // Use the complement id to search for the complement bubble chain
+        i_complement = chain_indexes_by_node_ids.at(start_id_complement);
+
+        // Verify complementary chains are the same size
+        if (chains[i].size() != chains[i_complement].size()){
+            string error_message;
+            error_message += "\tChain IDs (A B): " + std::to_string(chains[i][0].id) + " " + std::to_string(chains[i_complement][0].id) + "\n";
+            error_message += "\tNode IDs (A B): " + start_id + " " + start_id_complement + "\n";
+            error_message += "\tChain sizes (A B): " + std::to_string(chains[i].size()) + " " + std::to_string(chains[i_complement].size()) + "\n\n";
+
+            for (auto& item: chains[i]){
+                error_message += item.to_string();
+                error_message += '\n';
+            }
+
+            error_message += "\n\n";
+
+            for (auto& item: chains[i_complement]){
+                error_message += item.to_string();
+                error_message += '\n';
+            }
+
+            throw runtime_error("ERROR: bubble chain complement does not match size:\n" + error_message);
+        }
+
+        // Check if either of these complementary chains have been found
+        not_found = (found_chains.find(i) == found_chains.end()) and (found_chains.find(i_complement) == found_chains.end());
+
+//        cout << "\tChain IDs (A B): " + std::to_string(chains[i][0].id) + " " + std::to_string(chains[i_complement][0].id) + "\n";
+//        cout << "\tNode IDs (A B): " + start_id + " " + start_id_complement + "\n";
+//        cout << "\tChain sizes (A B): " + std::to_string(chains[i].size()) + " " + std::to_string(chains[i_complement].size()) + "\n";
+//        cout << (found_chains.find(i) == found_chains.end()) << " " << (found_chains.find(i_complement) == found_chains.end()) << "\n\n";
+
+        if (not_found){
+            single_stranded_chains.push_back(chains[i]);
+
+            // Save the first chain and put it + its complement in a set so they aren't added again
+            found_chains.insert(i);
+            found_chains.insert(i_complement);
+
+            // Save all the names of the segments so that later the Linkages from the GFA can be found
+            for (auto& component: chains[i]){
+                for (auto& node: component.segments){
+                    single_stranded_nodes.emplace(node);
+                }
+            }
+        }
+    }
+}
+
+
+void read_bubble_chains_from_csv(
+        ifstream& bubble_chain_file,
+        path bubble_path,
+        vector <vector <BubbleChainComponent> >& chains,
+        unordered_map <string, size_t>& chain_indexes_by_node_ids){
+
+    ///
+    /// Parse the bubble chain CSV with the format:
+    ///     Chain,Circular,Position,Segment0,Segment1,Segment2,Segment3,Segment4,
+    ///
+    string line;
+    uint64_t l = 0;
+
+    BubbleChainComponent chain_component;
+    BubbleChainComponent previous_chain_component;
+
+    string gfa_line;
+    string node_name;
+    vector <BubbleChainComponent> chain;
+    while (getline(bubble_chain_file, line)){
+        // Skip header line
+        if (l == 0){
+            l++;
+            continue;
+        }
+
+        // Catch empty lines if they exist?
+        if (line.empty()){
+            throw runtime_error("ERROR: empty line found in file: " + bubble_path.string() + " at line index " + std::to_string(l));
+        }
+
+        // Record the data about this component in the bubble chain (either a haploid segment or polyploid segment set)
+        parse_line_as_bubble_chain_component(line, chain_component);
+
+        // When the chain ends
+        if (chain_component.id != previous_chain_component.id and l > 1) {
+            if (chain.size() > 1) {
+                chains.emplace_back(chain);
+
+                // Record the first and last nodes in this chain, so that its complement can later be identified
+                for (auto &s: chain[0].segments) {
+                    chain_indexes_by_node_ids.emplace(s, chains.size() - 1);
+                }
+                for (auto &s: chain[chain.size() - 1].segments) {
+                    chain_indexes_by_node_ids.emplace(s, chains.size() - 1);
+                }
+            }
+
+            chain.resize(0);
+        }
+
+        chain.push_back(chain_component);
+        previous_chain_component = chain_component;
+        l++;
+    }
+}
 
 void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assembly_summary_path, path output_dir){
     create_directories(output_dir);
@@ -149,55 +283,31 @@ void extract_bubble_chains_from_gfa(path gfa_path, path bubble_path, path assemb
     GFAReader gfa_reader(gfa_path);
     gfa_reader.map_sequences_by_node();
 
-    string line;
-    uint64_t l = 0;
+    vector <vector <BubbleChainComponent> > chains;
+    vector <vector <BubbleChainComponent> > single_stranded_chains;
+    unordered_map <string, size_t> chain_indexes_by_node_ids;
+    unordered_set <string> single_stranded_nodes;
 
-    BubbleChainComponent chain_component;
-    BubbleChainComponent previous_chain_component;
+    read_bubble_chains_from_csv(
+            bubble_chain_file,
+            bubble_path,
+            chains,
+            chain_indexes_by_node_ids);
 
-    ///
-    /// Parse the bubble chain CSV with the format:
-    ///     Chain,Circular,Position,Segment0,Segment1,Segment2,Segment3,Segment4,
-    ///
-    string gfa_line;
-    string node_name;
-    unordered_set <string> forward_nodes;
-    vector <BubbleChainComponent> chain;
-    while (getline(bubble_chain_file, line)){
-        // Skip header line
-        if (l == 0){
-            l++;
-            continue;
-        }
+    find_single_stranded_chains_from_bubble_chains(
+            chains,
+            single_stranded_chains,
+            chain_indexes_by_node_ids,
+            node_complements,
+            single_stranded_nodes);
 
-        // Catch empty lines if they exist?
-        if (line.empty()){
-            throw runtime_error("ERROR: empty line found in file: " + bubble_path.string() + " at line index " + std::to_string(l));
-        }
+    write_all_chains_to_output_gfa(
+            single_stranded_chains,
+            node_complements,
+            gfa_reader,
+            output_gfa);
 
-        // Record the data about this component in the bubble chain (either a haploid segment or polyploid segment set)
-        parse_line_as_bubble_chain_component(line, chain_component);
-
-        // When the chain ends
-        if (chain_component.id != previous_chain_component.id and chain.size() > 1){
-            for (auto& c: chain){
-                write_chain_segments_to_output_gfa(
-                        c,
-                        node_complements,
-                        gfa_reader,
-                        gfa_line,
-                        output_gfa,
-                        forward_nodes);
-            }
-            chain.resize(0);
-        }
-
-        chain.push_back(chain_component);
-        previous_chain_component = chain_component;
-        l++;
-    }
-
-    gfa_reader.write_link_subset_to_file(forward_nodes, output_gfa);
+    gfa_reader.write_link_subset_to_file(single_stranded_nodes, output_gfa);
 }
 
 
